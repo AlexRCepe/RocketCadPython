@@ -2,6 +2,7 @@ import cadquery as cq
 from .parts import (
     CylinderBuilder,
     TransitionBuilder,
+    ConeBuilder,
 )
 
 class ProjectManager:
@@ -15,6 +16,7 @@ class ProjectManager:
 
         self._cbuilder = CylinderBuilder()
         self._tbuilder = TransitionBuilder()
+        self._conebuilder = ConeBuilder()
 
     @property
     def name(self):
@@ -59,6 +61,10 @@ class ProjectManager:
     def addTransition(self, height: float, radius1: float, radius2: float, thickness: float) -> None: 
         
         self.project = self._tbuilder.addPart(project= self.project, height= height, radius1= radius1, radius2= radius2, thickness= thickness)
+
+    def addCone(self, height: float, radius: float, thickness: float) -> None:
+
+        self.project = self._conebuilder.addPart(project= self.project, height= height, radius= radius, thickness= thickness)
     
     def exportProject(self, exportFolderPath: str, format: str): #? Make a new class for exporting projects
         

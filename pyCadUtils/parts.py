@@ -80,3 +80,44 @@ class TransitionBuilder(PartBuilder):
         project = project.add(transition)
         
         return project
+
+class ConeBuilder(PartBuilder):
+
+    "A class to build hollow cones."
+
+    def addPart(self, project: cq.Workplane, height: float, radius: float, thickness: float) -> cq.Workplane:
+        """
+        Arguments:
+            project(:cq.Workplane:): current project.
+            height(:float:): height of the cone.
+            radius(:float:): base radius of the cone.
+            thickness(:float:): thickness of the cone.
+
+        Returns:
+            project(:cq.Workplane:): the project with an added cone on the up most plane coaxial with the z-axis.
+        """
+        
+        cone = self.selectUpMostFace(project)
+
+        cone = (cone
+            .workplane(offset=0)
+            .transformed(rotate=(90,0, 0))
+            .polyline([(0,0), (radius,0), (0,height)])
+            .close()
+            .revolve(360)
+        )
+
+        inner_cone = self.selectUpMostFace(project)
+        inner_cone = (inner_cone
+            .workplane(offset=0)
+            .transformed(rotate=(90,0, 0))
+            .polyline([(0,0), (radius - thickness,0), (0,height - thickness)])
+            .close()
+            .revolve(360)
+        )
+
+        cone = cone.cut(inner_cone)
+
+        project = project.add(cone)        
+
+        return project

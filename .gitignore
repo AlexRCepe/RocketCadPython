@@ -1,0 +1,9 @@
+# Entornos virtuales
+cq_env/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VSCode settings
+.vscode/
