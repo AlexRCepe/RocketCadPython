@@ -1,8 +1,9 @@
 import cadquery as cq
 from .parts import (
-    CylinderBuilder,
-    TransitionBuilder,
-    ConeBuilder,
+    BodyTube3DBuilder,
+    Transition3DBuilder,
+    NoseCone3DBuilder,
+    Fins3DBuilder,
 )
 
 class ProjectManager:
@@ -14,9 +15,15 @@ class ProjectManager:
         self.name = name
         self.project = project
 
-        self._cbuilder = CylinderBuilder()
-        self._tbuilder = TransitionBuilder()
-        self._conebuilder = ConeBuilder()
+        self._btbuilder = BodyTube3DBuilder()
+        self._tbuilder = Transition3DBuilder()
+        self._conebuilder = NoseCone3DBuilder()
+        self._fbuilder = Fins3DBuilder()
+
+        # Track the position and diameter of the last body tube added
+        self._last_body_diameter = None
+        self._last_body_z_position = 0  # Z position where the last body tube sits
+        self._last_body_height = 0      # Height of the last body tube
 
     @property
     def name(self):
@@ -52,19 +59,41 @@ class ProjectManager:
     def newProject():
         return cq.Workplane("XY")
     
-    def addCylinder(self, height: float, radius: float, thickness: float) -> None:
+    def addBodyTube(self, length: float, diameter: float, thickness: float) -> None:
 
-        """Adds a hollow cylinder to the current project."""
+        """Adds a (hollow) cylinder to the current project."""
 
-        self.project = self._cbuilder.addPart(project=self.project, height=height, radius=radius, thickness=thickness)
+        self.project = self._btbuilder.addPart(project=self.project, length=length, diameter=diameter, thickness=thickness)
 
-    def addTransition(self, height: float, radius1: float, radius2: float, thickness: float) -> None: 
+        self._last_body_diameter = float(diameter)
+        self._last_body_height = float(length)
+        # Update Z position: top of the body tube
+        self._last_body_z_position = max(s.BoundingBox().zmax for s in self.project.vals())
+
+    def addTransition(self, length: float, bottom_diameter: float, top_diameter: float, thickness: float) -> None: 
         
-        self.project = self._tbuilder.addPart(project= self.project, height= height, radius1= radius1, radius2= radius2, thickness= thickness)
+        """Adds a (hollow) transition to the current project."""
 
-    def addCone(self, height: float, radius: float, thickness: float) -> None:
+        self.project = self._tbuilder.addPart(project= self.project, length= length, bottom_diameter= bottom_diameter, top_diameter= top_diameter, thickness= thickness)
 
-        self.project = self._conebuilder.addPart(project= self.project, height= height, radius= radius, thickness= thickness)
+    def addNoseCone(self, length: float, diameter: float, thickness: float) -> None:
+
+        """Adds a (hollow) NoseCone to the current project."""
+
+        self.project = self._conebuilder.addPart(project= self.project, length= length, diameter= diameter, thickness= thickness)
+
+    def addFinSet(self, count, root_chord, tip_chord, span, sweep, position, thickness, body_diameter=None):
+        bd = body_diameter if body_diameter is not None else self._last_body_diameter
+        if bd is None:
+            raise ValueError("body_diameter not provided and no BodyTube has been added yet")
+        
+        # Pass the Z position of the base of the last body tube (where fins should attach)
+        z_position = self._last_body_z_position - self._last_body_height
+        print(z_position)
+        print(self._last_body_z_position)
+        print(self._last_body_height)
+        self.project = self._fbuilder.addPart(self.project, count, root_chord, tip_chord,
+                                              span, sweep, position, thickness, body_diameter=bd, z_position=z_position)
     
     def exportProject(self, exportFolderPath: str, format: str): #? Make a new class for exporting projects
         

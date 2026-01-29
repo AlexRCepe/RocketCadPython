@@ -171,6 +171,127 @@ def prueba():
     
     show(result)
 
+def create_trapezoidal_fin(wp: cq.Workplane, root_chord: float, tip_chord: float, span: float, sweep: float, thickness: float) -> cq.Workplane:
+    # Define the 2D profile of the fin
+    points = [
+        (0, 0),  # Root leading edge
+        (0, root_chord),  # Root trailing edge
+        (span, root_chord - sweep),  # Tip trailing edge
+        (span, root_chord - sweep - tip_chord),  # Tip leading edge
+    ]
+
+    # Create the fin profile and extrude it to create a 3D fin
+    fin = (
+        wp.polyline(points)
+        .close()
+        .extrude(thickness)
+    )
+    base = wp.rect(span, root_chord).extrude(thickness)
+
+    fin = fin.rotate((0,0,0), (1,0,0), 90).translate((0,5,3))
+    project= base.add(fin)
+    return project
+
+def create_FinSet(wp: cq.Workplane, count: int, root_chord: float, tip_chord: float, span: float, sweep: float, position: float, thickness: float, body_diameter: float) -> cq.Workplane:
+        """
+        Create Fin Set geometry on the given workplane.
+        Returns a Workplane object with the FinSet solid positioned with base at the given workplane.
+        """
+        body_radius = body_diameter / 2.0
+
+        # wp = wp.offset2D(position).rotate((0,0,0),(0,1,0),90).offset2D(-body_radius)
+        wp = wp.transformed((90,0,0))
+        fin = create_trapezoidal_fin(wp, root_chord, tip_chord, span, sweep, thickness)
+
+        finset = None
+        for i in range(count):
+            angle_deg = i * 360.0 / count
+
+            # copy and position:
+            # 1) translate so root sits radially at body_radius
+            # 2) translate axially to `position`
+            # 3) rotate around the rocket axis (Z) at origin
+            # f = fin.translate((position, body_radius, 0.0))
+            # rotate around origin Z (CadQuery rotate takes degrees)
+            # f = fin.rotate((0, 0, 0), (0, 0, 1), angle_deg)
+
+            if finset is None:
+                finset = fin
+            else:
+                finset = finset.union(fin)
+
+        # If no fins (count == 0) return an empty workplane
+        if finset is None:
+            return cq.Workplane("XY")  # empty
+        # normalize base if needed (optional)
+        try:
+            bbox = finset.val().BoundingBox()
+            finset = finset.translate((0, 0, -bbox.zmin))
+        except Exception:
+            pass
+
+        return finset
+EPS = 1e-9
+
+def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float) -> cq.Workplane:
+    # 1. Define the Shape Function
+    conical_shape = lambda x, R, L, k: (((R**2 + L**2)/2.0/R)**2 - (L - x)**2)**(0.5) + R - ((R**2 + L**2)/2.0/R)
+    
+    # Parameters
+    R = radius
+    L = height
+    k = 0.50
+    num_steps = 30
+
+    # --- Generate Outer Solid ---
+    outer_points = []
+    for i in range(num_steps + 1):
+        h = i * L / num_steps
+        r = conical_shape(h, R, L, k)
+        outer_points.append((r, h))
+    
+    # Close the profile: connect (R, L) -> (0, L)
+    outer_points.append((0, L))
+    
+    outer_cone = (
+        wp.workplane(offset=0)
+        .polyline(outer_points)
+        .close()
+        .revolve()
+    )
+
+    # --- Generate Inner Solid (The Void) ---
+    # Inner cone has reduced radius (R - thickness) and proportionally reduced height
+    inner_points = []
+    inner_r = max(R - thickness, 1e-9)
+    inner_l = max(L - thickness * (L / R), 1e-9)
+    y_offset = thickness * (L / R)
+    
+    for i in range(num_steps + 1):
+        y = i * inner_l / num_steps
+        x = conical_shape(y, inner_r, inner_l, k)
+        inner_points.append((x, y + y_offset))
+
+    # Close the profile: connect (inner_r, L) -> (0, L)
+    inner_points.append((0, inner_l + y_offset))
+
+    inner_cone = (
+        wp.workplane(offset=0)
+        .polyline(inner_points)
+        .close()
+        .revolve()
+    )
+
+    # --- Boolean Operation ---
+    # Subtract the inner void from the outer shape
+    result = outer_cone.cut(inner_cone)
+    
+    return result
+
+
+
+# Export to verify
+# cq.exporters.export(result, "hollow_cone.step")
 
 
 # Example usage
@@ -186,16 +307,18 @@ def prueba():
 
 print(cq.__version__)
 # show(make_hollow_cylinder(10,50,2))
-show(make_hollow_cone(20,50,2), alpha=0.8)
+# show(create_trapezoidal_fin(cq.Workplane("XY"),20,10,10,10,1), alpha=0.8)
+show(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.7), alpha=0.6)
+# show(create_FinSet(cq.Workplane("XY"),4,20,10,10,10,30,1,20), alpha=0.8)
 # show(make_cone_on_cylinder(5,20,1,5,50,1), alpha=0.3)
 # show(hollow_transition(10,5,20,2),alpha=0.7)
 # prueba()
 
-body_tube = make_hollow_cylinder(15,100,2)
-cone = make_hollow_cone(10,30,2)
-transition = hollow_transition(15,10,20,2)
+# body_tube = make_hollow_cylinder(15,100,2)
+# cone = make_hollow_cone(10,30,2)
+# transition = hollow_transition(15,10,20,2)
 
-rocket_model = rocket(body_tube,cone,transition)
+# rocket_model = rocket(body_tube,cone,transition)
 # show(rocket_model, alpha=0.5)
 
-#cq.exporters.export(cone_on_cylinder, "cone_on_cylinder.stl")
+cq.exporters.export(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.7), "ojiva.stl")
