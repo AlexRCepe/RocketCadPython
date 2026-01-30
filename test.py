@@ -235,13 +235,13 @@ EPS = 1e-9
 
 def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float) -> cq.Workplane:
     # 1. Define the Shape Function
-    conical_shape = lambda x, R, L, k: (((R**2 + L**2)/2.0/R)**2 - (L - x)**2)**(0.5) + R - ((R**2 + L**2)/2.0/R)
+    conical_shape = lambda x, R, L, k: R * (x/L)**k
     
     # Parameters
     R = radius
     L = height
-    k = 0.50
-    num_steps = 30
+    k = 2.0
+    num_steps = 20
 
     # --- Generate Outer Solid ---
     outer_points = []
@@ -250,15 +250,13 @@ def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float
         r = conical_shape(h, R, L, k)
         outer_points.append((r, h))
     
-    # Close the profile: connect (R, L) -> (0, L)
-    outer_points.append((0, L))
-    
     outer_cone = (
-        wp.workplane(offset=0)
-        .polyline(outer_points)
-        .close()
-        .revolve()
-    )
+            wp.workplane(offset=0)
+            .spline(outer_points)  # Draw the side (Curve or Line)
+            .lineTo(0, L)            # Draw the top cap (Flat Line)
+            .close()                 # Draw the axis (Straight Line back to start)
+            .revolve()
+        )
 
     # --- Generate Inner Solid (The Void) ---
     # Inner cone has reduced radius (R - thickness) and proportionally reduced height
@@ -272,15 +270,13 @@ def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float
         x = conical_shape(y, inner_r, inner_l, k)
         inner_points.append((x, y + y_offset))
 
-    # Close the profile: connect (inner_r, L) -> (0, L)
-    inner_points.append((0, inner_l + y_offset))
-
     inner_cone = (
-        wp.workplane(offset=0)
-        .polyline(inner_points)
-        .close()
-        .revolve()
-    )
+            wp.workplane(offset=0)
+            .spline(inner_points)  # Draw the side (Curve or Line)
+            .lineTo(0, inner_l + y_offset)            # Draw the top cap (Flat Line)
+            .close()                 # Draw the axis (Straight Line back to start)
+            .revolve()
+        )
 
     # --- Boolean Operation ---
     # Subtract the inner void from the outer shape
@@ -308,7 +304,7 @@ def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float
 print(cq.__version__)
 # show(make_hollow_cylinder(10,50,2))
 # show(create_trapezoidal_fin(cq.Workplane("XY"),20,10,10,10,1), alpha=0.8)
-show(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.7), alpha=0.6)
+show(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.8), alpha=0.6)
 # show(create_FinSet(cq.Workplane("XY"),4,20,10,10,10,30,1,20), alpha=0.8)
 # show(make_cone_on_cylinder(5,20,1,5,50,1), alpha=0.3)
 # show(hollow_transition(10,5,20,2),alpha=0.7)
@@ -321,4 +317,4 @@ show(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.7), alpha
 # rocket_model = rocket(body_tube,cone,transition)
 # show(rocket_model, alpha=0.5)
 
-cq.exporters.export(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.7), "ojiva.stl")
+# cq.exporters.export(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.7), "ojiva.stl")
