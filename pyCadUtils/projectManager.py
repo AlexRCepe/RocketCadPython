@@ -76,11 +76,12 @@ class ProjectManager:
 
         self.project = self._tbuilder.addPart(project= self.project, length= length, bottom_diameter= bottom_diameter, top_diameter= top_diameter, thickness= thickness)
 
-    def addNoseCone(self, length: float, diameter: float, thickness: float) -> None:
+    def addNoseCone(self, shape: str, length: float, diameter: float, thickness: float, k: float = 0.7) -> None:
 
         """Adds a (hollow) NoseCone to the current project."""
+        z_position = self._last_body_z_position + length
 
-        self.project = self._conebuilder.addPart(project= self.project, length= length, diameter= diameter, thickness= thickness)
+        self.project = self._conebuilder.addPart(project= self.project, shape=shape, length= length, diameter= diameter, thickness= thickness, z_position=z_position, k=k)
 
     def addFinSet(self, count, root_chord, tip_chord, span, sweep, position, thickness, body_diameter=None):
         bd = body_diameter if body_diameter is not None else self._last_body_diameter
@@ -89,9 +90,7 @@ class ProjectManager:
         
         # Pass the Z position of the base of the last body tube (where fins should attach)
         z_position = self._last_body_z_position - self._last_body_height
-        print(z_position)
-        print(self._last_body_z_position)
-        print(self._last_body_height)
+
         self.project = self._fbuilder.addPart(self.project, count, root_chord, tip_chord,
                                               span, sweep, position, thickness, body_diameter=bd, z_position=z_position)
     

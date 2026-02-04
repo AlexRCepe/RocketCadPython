@@ -88,14 +88,17 @@ class NoseCone3DBuilder(Part3DBuilder):
 
     "A class to build (hollow) NoseCones"
 
-    def create_NoseCone(self, wp: cq.Workplane, height: float, radius: float, thickness: float) -> cq.Workplane:
+    def create_NoseCone(self, wp: cq.Workplane, shape: str, height: float, radius: float, thickness: float, k: float, z_BodyTube: float) -> cq.Workplane:
         """
         Create nose cone geometry on the given workplane.
         Returns a Workplane object with the NoseCone solid positioned with base at the given workplane.
         """
-        return create_cone(wp, height, radius, thickness)
+        local_wp = cq.Workplane("XZ")  # Rotate to have base at z=0
+        cone = create_cone(local_wp, shape, height, radius, thickness, k)
+        cone = cone.rotate((0,0,0), (0,1,0), 180).translate((0, 0, z_BodyTube))  # Position base at workplane
+        return cone
 
-    def addPart(self, project: cq.Workplane, length: float, diameter: float, thickness: float) -> cq.Workplane:
+    def addPart(self, project: cq.Workplane, shape: str, length: float, diameter: float, thickness: float, z_position: float, k: float = 0.7) -> cq.Workplane:
         """
         Arguments:
             project(:cq.Workplane:): current project.
@@ -109,7 +112,7 @@ class NoseCone3DBuilder(Part3DBuilder):
         wp = self.selectUpMostFace(project)
         radius = diameter / 2.0
 
-        cone = self.create_NoseCone(wp, length, radius, thickness)
+        cone = self.create_NoseCone(wp, shape, length, radius, thickness, k, z_position)
 
         project = project.add(cone)
 

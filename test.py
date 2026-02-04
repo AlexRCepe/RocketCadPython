@@ -233,21 +233,46 @@ def create_FinSet(wp: cq.Workplane, count: int, root_chord: float, tip_chord: fl
         return finset
 EPS = 1e-9
 
-def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float) -> cq.Workplane:
-    # 1. Define the Shape Function
-    conical_shape = lambda x, R, L, k: R * (x/L)**k
+def create_cone(wp: cq.Workplane, shape: str, height: float, radius: float, thickness: float, k: float = 0.7) -> cq.Workplane:
+    """
+    Create a nosecone with various shape profiles.
     
+    Parameters:
+    wp (cq.Workplane): The workplane to create the cone on.
+    shape (str): The shape type of the nosecone. Options: 'CONICAL', 'OGIVE', 'ELLIPTICAL', 'POWER_LAW'
+    height (float): The length/height of the nosecone.
+    radius (float): The radius of the nosecone at the base.
+    thickness (float): The thickness of the cone wall.
+    k (float): The exponent for POWER_LAW shape (default: 0.7).
+    
+    Returns:
+    cq.Workplane: A nosecone solid with the specified shape.
+    """
+    
+    # Define shape functions
+    shapes = {
+        'CONICAL': lambda x, R, L: x * R / L,
+        'OGIVE': lambda x, R, L: (((R**2 + L**2)/2.0/R)**2 - (L - x)**2)**(0.5) + R - ((R**2 + L**2)/2.0/R),
+        'ELLIPTICAL': lambda x, R, L: R * (2*(x/L) - (x/L)**2)**(0.5),
+        'POWER_LAW': lambda x, R, L: R * (x/L)**k,
+    }
+    
+    # Validate and select shape function
+    if shape not in shapes:
+        raise ValueError(f"Invalid shape '{shape}'. Must be one of: {list(shapes.keys())}")
+    
+    conical_shape = shapes[shape]
+
     # Parameters
     R = radius
     L = height
-    k = 2.0
-    num_steps = 20
+    num_steps = 100
 
     # --- Generate Outer Solid ---
     outer_points = []
     for i in range(num_steps + 1):
         h = i * L / num_steps
-        r = conical_shape(h, R, L, k)
+        r = conical_shape(h, R, L)
         outer_points.append((r, h))
     
     outer_cone = (
@@ -263,11 +288,11 @@ def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float
     inner_points = []
     inner_r = max(R - thickness, 1e-9)
     inner_l = max(L - thickness * (L / R), 1e-9)
-    y_offset = thickness * (L / R)
+    y_offset = thickness * (L / R) 
     
     for i in range(num_steps + 1):
         y = i * inner_l / num_steps
-        x = conical_shape(y, inner_r, inner_l, k)
+        x = conical_shape(y, inner_r, inner_l)
         inner_points.append((x, y + y_offset))
 
     inner_cone = (
@@ -304,7 +329,7 @@ def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float
 print(cq.__version__)
 # show(make_hollow_cylinder(10,50,2))
 # show(create_trapezoidal_fin(cq.Workplane("XY"),20,10,10,10,1), alpha=0.8)
-show(create_cone(cq.Workplane('XY'), height=20, radius=10, thickness=3.8), alpha=0.6)
+show(create_cone(cq.Workplane('XY'), shape='POWER_LAW', height=20, radius=10, thickness=3.8, k=2), alpha=0.6)
 # show(create_FinSet(cq.Workplane("XY"),4,20,10,10,10,30,1,20), alpha=0.8)
 # show(make_cone_on_cylinder(5,20,1,5,50,1), alpha=0.3)
 # show(hollow_transition(10,5,20,2),alpha=0.7)

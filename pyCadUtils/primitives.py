@@ -26,45 +26,80 @@ def create_cylinder(wp: cq.Workplane, height: float, radius: float, thickness: f
     # return _normalize_base_to_z0(result)
     return result
 
-def create_cone(wp: cq.Workplane, height: float, radius: float, thickness: float) -> cq.Workplane:
-    # Outer cone (profile drawn on a rotated workplane so revolve gives cone with base on upmost face)
-    outer = (
-        wp.workplane(offset=0)
-        .transformed(rotate=(90, 0, 0))
-        .polyline([(0, 0), (radius, 0), (0, height)])
-        .close()
-        .revolve(360)
-    )
+def create_cone(wp: cq.Workplane, shape: str, height: float, radius: float, thickness: float, k: float = 0.7) -> cq.Workplane:
+    """
+    Create a nosecone with various shape profiles.
+    
+    Parameters:
+    wp (cq.Workplane): The workplane to create the cone on.
+    shape (str): The shape type of the nosecone. Options: 'CONICAL', 'OGIVE', 'ELLIPTICAL', 'POWER_LAW'
+    height (float): The length/height of the nosecone.
+    radius (float): The radius of the nosecone at the base.
+    thickness (float): The thickness of the cone wall.
+    k (float): The exponent for POWER_LAW shape (default: 0.7).
+    
+    Returns:
+    cq.Workplane: A nosecone solid with the specified shape.
+    """
+    
+    # Define shape functions
+    shapes = {
+        'CONICAL': lambda x, R, L: x * R / L,
+        'OGIVE': lambda x, R, L: (((R**2 + L**2)/2.0/R)**2 - (L - x)**2)**(0.5) + R - ((R**2 + L**2)/2.0/R),
+        'ELLIPTICAL': lambda x, R, L: R * (2*(x/L) - (x/L)**2)**(0.5),
+        'POWER_LAW': lambda x, R, L: R * (x/L)**k,
+    }
+    
+    # Validate and select shape function
+    if shape not in shapes:
+        raise ValueError(f"Invalid shape '{shape}'. Must be one of: {list(shapes.keys())}")
+    
+    conical_shape = shapes[shape]
 
-    if thickness is None or thickness <= 0:
-        result = outer
-    else:
-        # inner base radius = radius - thickness
-        # inner apex is shifted axially by a proportional amount: height_difference = thickness * (height / radius)
-        if radius <= EPS or height <= EPS:
-            inner_r = max(radius - thickness, 0.0)
-            inner = (
-                wp.workplane(offset=0)
-                .transformed(rotate=(90, 0, 0))
-                .polyline([(0, 0), (inner_r, 0), (0, height)])
-                .close()
-                .revolve(360)
-            )
-        else:
-            inner_r = max(radius - thickness, 0.0)
-            height_difference = thickness * (height / radius)
-            inner_apex_z = max(height - height_difference, EPS)
-            inner = (
-                wp.workplane(offset=0)
-                .transformed(rotate=(90, 0, 0))
-                .polyline([(0, 0), (inner_r, 0), (0, inner_apex_z)])
-                .close()
-                .revolve(360)
-            )
+    # Parameters
+    R = radius
+    L = height
+    num_steps = 100
 
-        result = outer.cut(inner)
+    # --- Generate Outer Solid ---
+    outer_points = []
+    for i in range(num_steps + 1):
+        h = i * L / num_steps
+        r = conical_shape(h, R, L)
+        outer_points.append((r, h))
+    
+    outer_cone = (
+            wp.workplane(offset=0)
+            .spline(outer_points)  # Draw the side (Curve or Line)
+            .lineTo(0, L)            # Draw the top cap (Flat Line)
+            .close()                 # Draw the axis (Straight Line back to start)
+            .revolve()
+        )
 
-    # return _normalize_base_to_z0(result)
+    # --- Generate Inner Solid (The Void) ---
+    # Inner cone has reduced radius (R - thickness) and proportionally reduced height
+    inner_points = []
+    inner_r = max(R - thickness, 1e-9)
+    inner_l = max(L - thickness * (L / R), 1e-9)
+    y_offset = thickness * (L / R) 
+    
+    for i in range(num_steps + 1):
+        y = i * inner_l / num_steps
+        x = conical_shape(y, inner_r, inner_l)
+        inner_points.append((x, y + y_offset))
+
+    inner_cone = (
+            wp.workplane(offset=0)
+            .spline(inner_points)  # Draw the side (Curve or Line)
+            .lineTo(0, inner_l + y_offset)            # Draw the top cap (Flat Line)
+            .close()                 # Draw the axis (Straight Line back to start)
+            .revolve()
+        )
+
+    # --- Boolean Operation ---
+    # Subtract the inner void from the outer shape
+    result = outer_cone.cut(inner_cone)
+    
     return result
 
 def create_transition(wp: cq.Workplane, height: float, radius1: float, radius2: float, thickness: float) -> cq.Workplane:
